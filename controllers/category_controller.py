@@ -18,7 +18,7 @@ async def list_categories():
     return await get_all_categories()
 
 @router.get("/{category_id}", response_model=CategoryResponse)
-async def get_category(category_id: str):
+async def get_category(category_id: int):
     return await get_category_by_id(category_id)
 
 # 🔹 Auth required
@@ -27,9 +27,9 @@ async def add_category(req: CategoryRequest, current_user: dict = Depends(get_cu
     return await create_category(req)
 
 @router.put("/{category_id}", response_model=CategoryResponse)
-async def edit_category(category_id: str, req: CategoryRequest, current_user: dict = Depends(get_current_user)):
+async def edit_category(category_id: int, req: CategoryRequest, current_user: dict = Depends(get_current_user)):
     return await update_category(category_id, req)
 
 @router.delete("/{category_id}")
-async def remove_category(category_id: str, current_user: dict = Depends(get_current_user)):
+async def remove_category(category_id: int, current_user: dict = Depends(get_current_user)):
     return await delete_category(category_id)

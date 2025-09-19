@@ -20,9 +20,12 @@ from database.connection import db
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 collection = db["users"]
-
 bearer_scheme = HTTPBearer(auto_error=False)
 
+# ========== Helper: lấy next int _id ==========
+async def get_next_user_id():
+    last = await collection.find_one(sort=[("_id", -1)])
+    return (last["_id"] + 1) if last else 1
 
 # ========== REGISTER ==========
 @router.post("/register")
@@ -43,6 +46,7 @@ async def register(req: RegisterRequest):
 
     password_hash = hash_password(req.password)
     user_doc = {
+        "_id": await get_next_user_id(),
         "username": req.username,
         "email": req.email,
         "password_hash": password_hash,
@@ -75,7 +79,7 @@ async def login(req: LoginRequest, response: Response):
     if not user or not verify_password(req.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    token = create_access_token(subject=user["username"])
+    token = create_access_token(user_id=user["_id"], username=user["username"])
     # set httpOnly cookie để browser tự gửi ở những request tiếp theo (không cần user dán token)
     response.set_cookie(
         key="access_token",
@@ -113,15 +117,8 @@ def logout(request: Request, response: Response, credentials: HTTPAuthorizationC
 @router.post("/change-password")
 async def change_user_password(
     request: ChangePasswordInput,
-    current_user: dict = Depends(get_current_user)  # token -> user
+    current_user: dict = Depends(get_current_user)
 ):
-    #check is valid new password
-    if not is_valid_password(request.new_password):
-        raise HTTPException(
-            status_code=400,
-            detail="Password must be at least 6 characters, include uppercase, lowercase, number, and special character"
-        )
-    # Gán username từ token
     req_with_user = ChangePasswordRequest(
         username=current_user["username"],
         old_password=request.old_password,
@@ -129,8 +126,15 @@ async def change_user_password(
     )
 
     result = await change_password(req_with_user)
+    if result == -404:
+        raise HTTPException(status_code=404, detail="User not found")
     if result == -1:
         raise HTTPException(status_code=400, detail="Old password is incorrect")
+    if result == -2:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters, include uppercase, lowercase, number, and special character")
+    if result == -3:
+        raise HTTPException(status_code=400, detail="New password must be different from old password")
+
     return {"message": "Password changed successfully"}
 
 
@@ -141,12 +145,11 @@ async def upload_my_avatar(
     file: UploadFile = File(...),
     current_user: dict = Depends(get_current_user)
 ):
-    user_id = current_user["_id"]  # lấy user_id từ token
-    return await upload_avatar(user_id, file)
+    return await upload_avatar(int(current_user["_id"]), file)
 
 # Hiển thị avatar (public)
 @router.get("/avatar/{user_id}")
-async def get_user_avatar(user_id: str):
+async def get_user_avatar(user_id: int):
     filepath = await get_avatar(user_id)
     if not filepath or not os.path.exists(filepath):
         raise HTTPException(status_code=404, detail="Avatar not found")
@@ -157,12 +160,10 @@ async def update_my_avatar(
     file: UploadFile = File(...),
     current_user: dict = Depends(get_current_user)
 ):
-    user_id = current_user["_id"]
-    return await update_avatar(user_id, file)
+    return await update_avatar(int(current_user["_id"]), file)
 # Delete avatar (cần token để xác thực)
 @router.delete("/me/avatar")
 async def delete_my_avatar(
     current_user: dict = Depends(get_current_user)
 ):
-    user_id = current_user["_id"]
-    return await delete_avatar(user_id)
+    return await delete_avatar(int(current_user["_id"]))

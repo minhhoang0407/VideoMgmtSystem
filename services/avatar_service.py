@@ -1,6 +1,5 @@
 import os
 from fastapi import UploadFile
-from bson import ObjectId
 from database.connection import db 
 
 AVATAR_DIR = "assets/avatars"
@@ -10,7 +9,7 @@ collection = db["users"]
 os.makedirs(AVATAR_DIR, exist_ok=True)
 
 
-async def upload_avatar(user_id: str, file: UploadFile):
+async def upload_avatar(user_id: int, file: UploadFile):
     """
     Upload avatar cho user_id
     - Lưu file vào assets/avatars/{user_id}.png
@@ -27,25 +26,25 @@ async def upload_avatar(user_id: str, file: UploadFile):
 
     # Update avatar path trong Mongo
     await collection.update_one(
-        {"_id": ObjectId(user_id)},
+        {"_id": user_id},
         {"$set": {"avatar": filepath}}
     )
 
     return {"message": "Avatar uploaded successfully", "avatar_path": filepath}
 
 
-async def get_avatar(user_id: str):
+async def get_avatar(user_id: int):
     """
     Trả về đường dẫn file avatar dựa trên user_id
     """
-    user = await collection.find_one({"_id": ObjectId(user_id)})
+    user = await collection.find_one({"_id": user_id})
     if not user or not user.get("avatar"):
         return None
     return user["avatar"]
 
-async def update_avatar(user_id: str, file: UploadFile):
+async def update_avatar(user_id: int, file: UploadFile):
     # Tìm avatar cũ
-    user = await collection.find_one({"_id": ObjectId(user_id)})
+    user = await collection.find_one({"_id": user_id})
     old_avatar = user.get("avatar") if user else None
 
     # Xóa file cũ nếu có
@@ -62,14 +61,14 @@ async def update_avatar(user_id: str, file: UploadFile):
 
     # Cập nhật DB
     await collection.update_one(
-        {"_id": ObjectId(user_id)},
+        {"_id": user_id},
         {"$set": {"avatar": filepath}}
     )
 
     return {"message": "Avatar updated successfully"}
 
-async def delete_avatar(user_id: str):
-    user = await collection.find_one({"_id": ObjectId(user_id)})
+async def delete_avatar(user_id: int):
+    user = await collection.find_one({"_id": user_id})
     if not user or not user.get("avatar"):
         return {"message": "No avatar to delete"}
 
@@ -78,7 +77,7 @@ async def delete_avatar(user_id: str):
         os.remove(filepath)
 
     await collection.update_one(
-        {"_id": ObjectId(user_id)},
+        {"_id": user_id},
         {"$unset": {"avatar": ""}}
     )
     return {"message": "Avatar deleted successfully"}

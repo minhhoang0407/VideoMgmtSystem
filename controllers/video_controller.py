@@ -22,13 +22,13 @@ async def list_videos():
 
 #cần token
 #post metadata video
-@router.post("/", response_model=VideoInsertRequest)
+@router.post("/", response_model=VideoResponse)
 async def post_video(
     video_input: VideoInsertInput,
     current_user: dict = Depends(get_current_user)
 ):
     try:
-        # ✅ Gán uploader từ token
+        # ✅ Tạo request để insert
         video_req = VideoInsertRequest(
             title=video_input.title,
             description=video_input.description,
@@ -36,10 +36,13 @@ async def post_video(
             category=video_input.category,
             tags=video_input.tags
         )
-        video_req.uploader_id = str(current_user["_id"])
+        video_req.uploader_id = int(current_user["id"])
         video_req.uploader_name = current_user["username"]
 
+        # ✅ Tạo video trong DB
         created_video = await create_video(video_req)
+
+        # ✅ Trả về VideoResponse
         return created_video
     except HTTPException:
         raise
@@ -49,7 +52,7 @@ async def post_video(
 #post upload video
 @router.post("/upload/{video_id}", response_model=VideoResponse)
 async def upload_video_file(
-    video_id: str,
+    video_id: int,
     file: UploadFile = File(...),
     current_user: dict = Depends(get_current_user)
 ):
@@ -62,7 +65,7 @@ async def upload_video_file(
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/{video_id}")
-async def get_video(video_id: str):
+async def get_video(video_id: int):
     video = await get_video_by_id(video_id)
     if not video:
          # ❌ Không tìm thấy document -> 404
@@ -79,7 +82,7 @@ async def list_videos_by_uploader(uploader_name: str):
         return videos
 
 # 🔹 GET theo category
-@router.get("/category/{category}", response_model=List[VideoResponse])
+@router.get("/category/{category_name}", response_model=List[VideoResponse])
 async def list_videos_by_category(category: str):
     videos = await get_videos_by_category(category)
     if videos==[]:
@@ -90,7 +93,7 @@ async def list_videos_by_category(category: str):
 #cần token
 # 🔹 PUT update video
 @router.put("/{video_id}")
-async def edit_video(video_id: str,
+async def edit_video(video_id: int,
      video_update: VideoUpdateRequest,
      current_user: dict = Depends(get_current_user)
     ):
@@ -98,7 +101,7 @@ async def edit_video(video_id: str,
 
 #cần token
 @router.delete("/{video_id}")
-async def remove_video(video_id: str,
+async def remove_video(video_id: int,
      current_user: dict = Depends(get_current_user)
     ):
     return await delete_video(video_id)

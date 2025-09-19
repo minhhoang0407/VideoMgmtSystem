@@ -1,6 +1,5 @@
 import hashlib,hmac
 from fastapi import HTTPException, Depends, Request, Security
-from bson import ObjectId
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import jwt
 from datetime import datetime, timedelta,timezone
@@ -12,6 +11,7 @@ import re
 revoked_tokens = set()
 collection = db["users"]
 bearer_scheme = HTTPBearer(auto_error=False)
+ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
 #=========================PASSWORD HASH=======================================
 def hash_password(password: str) -> str:
@@ -38,17 +38,18 @@ def is_valid_password(password: str) -> bool:
         return False
     if not re.search(r"\d", password):
         return False
-    if not re.search(r"[@$!%*?&]", password):  # bạn có thể mở rộng ký tự đặc biệt
+    if not re.search(r"[@$!%*?&;:.,^~`)(\-_=+/|}{><\]]", password):  # bạn có thể mở rộng ký tự đặc biệt
         return False
     return True
 #==========================JWT TOKEN==========================================
-def create_access_token(subject: str, expires_minutes: int = 60) -> str:
-    expire = datetime.now(timezone.utc) + timedelta(minutes=expires_minutes)
-    payload = {"sub": subject, "exp": expire}
+def create_access_token(user_id: str, username: str):
+    expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    payload = {
+        "sub": str(user_id),       # subject = user_id
+        "username": username,      # thêm username cho tiện
+        "exp": expire
+    }
     token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
-    # pyjwt có thể trả bytes trên 1 số phiên bản
-    if isinstance(token, bytes):
-        token = token.decode("utf-8")
     return token
 
 def verify_access_token(token: str):
@@ -57,9 +58,9 @@ def verify_access_token(token: str):
     try:
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
         return payload
-    except jwt.ExpiredSignatureError:
+    except ExpiredSignatureError:
         return None
-    except jwt.InvalidTokenError:
+    except JWTError:
         return None
 
 def revoke_token(token: str):
@@ -69,27 +70,30 @@ def revoke_token(token: str):
 async def change_password(req):
     user = await collection.find_one({"username": req.username})
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        return -404  # user not found
 
-    # kiểm tra mật khẩu cũ
     if not verify_password(req.old_password, user["password_hash"]):
-        return -1
+        return -1  # old password sai
 
-    # update mật khẩu mới
+    if not is_valid_password(req.new_password):
+        return -2  # new password invalid
+
+    if verify_password(req.new_password, user["password_hash"]):
+        return -3  # new password trùng old password
+
     new_hash = hash_password(req.new_password)
-    collection.update_one(
+    await collection.update_one(
         {"username": req.username},
         {"$set": {"password_hash": new_hash}}
     )
     return 1
 
 #===============user helper===============================
-
 async def get_current_user(
     request: Request,
-    credentials: HTTPAuthorizationCredentials = Security(bearer_scheme)  # dùng Security để OpenAPI nhận diện
+    credentials: HTTPAuthorizationCredentials = Security(bearer_scheme)
 ):
-    # ưu tiên Bearer token, fallback cookie 'access_token'
+    # Ưu tiên Bearer token, fallback cookie
     token = None
     if credentials and credentials.credentials:
         token = credentials.credentials
@@ -103,15 +107,19 @@ async def get_current_user(
     if not payload:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
-    # payload['sub'] ở đây ta dùng làm username (subject)
-    username = payload.get("sub")
-    user = await collection.find_one({"username": username})
+    # lấy user_id từ sub
+    user_id = payload.get("sub")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid token payload")
+
+    # query user
+    user = await collection.find_one({"_id": int(user_id)})
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
 
-    # Chuyển ObjectId sang string
+    # loại bỏ password_hash khi trả ra
     user_out = {k: v for k, v in user.items() if k != "password_hash"}
-    if "_id" in user_out and isinstance(user_out["_id"], ObjectId):
-        user_out["_id"] = str(user_out["_id"])
+    # đồng nhất key id
+    user_out["id"] = str(user_out.pop("_id"))
 
     return user_out

@@ -5,19 +5,27 @@ from fastapi import HTTPException
 
 collection = db["categories"]
 
+# ================== Helper ==================
 def category_helper(cat) -> CategoryResponse:
     return CategoryResponse(
-        id=str(cat["_id"]),
+        #id=str(cat["_id"]),  # ép sang string để trả ra API
         name=cat["name"],
         description=cat.get("description")
     )
 
+
+async def get_next_id_from_max():
+    """Sinh ID mới dựa trên max _id hiện có"""
+    last = await collection.find_one(sort=[("_id", -1)])
+    return (last["_id"] + 1) if last and "_id" in last else 1
+
+
 # 🔹 Create
 async def create_category(req: CategoryRequest) -> CategoryResponse:
     new_cat = req.model_dump()
-    result = await collection.insert_one(new_cat)
-    created = await collection.find_one({"_id": result.inserted_id})
-    return category_helper(created)
+    new_cat["_id"] = await get_next_id_from_max()  # int ID
+    await collection.insert_one(new_cat)
+    return category_helper(new_cat)
 
 # 🔹 Read all
 async def get_all_categories():
@@ -27,27 +35,27 @@ async def get_all_categories():
     return categories
 
 # 🔹 Read by id
-async def get_category_by_id(category_id: str):
-    cat = await collection.find_one({"_id": ObjectId(category_id)})
+async def get_category_by_id(category_id: int):
+    cat = await collection.find_one({"_id": category_id})
     if not cat:
         raise HTTPException(status_code=404, detail="Category not found")
     return category_helper(cat)
 
 # 🔹 Update
-async def update_category(category_id: str, req: CategoryRequest):
+async def update_category(category_id: int, req: CategoryRequest):
     update_data = req.model_dump()
     result = await collection.update_one(
-        {"_id": ObjectId(category_id)},
+        {"_id": category_id},
         {"$set": update_data}
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=404, detail="Category not found or no changes made")
-    updated = await collection.find_one({"_id": ObjectId(category_id)})
+    updated = await collection.find_one({"_id": category_id})
     return category_helper(updated)
 
 # 🔹 Delete
-async def delete_category(category_id: str):
-    result = await collection.delete_one({"_id": ObjectId(category_id)})
+async def delete_category(category_id: int):
+    result = await collection.delete_one({"_id": category_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Category not found")
     return {"message": "Category deleted successfully"}

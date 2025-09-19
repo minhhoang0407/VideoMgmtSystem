@@ -1,34 +1,39 @@
 from pydantic import BaseModel, EmailStr
-from datetime import datetime,timezone
+from datetime import datetime
 from typing import List, Optional
 
 
 class User(BaseModel):
+    id: int                      # ✅ _id trong MongoDB bây giờ là số nguyên
     username: str
     email: EmailStr
     password_hash: str
     avatar: Optional[str] = None  # path cục bộ trong assets/avatars
     created_at: datetime = datetime.utcnow()
-    subscriptions: List[str] = []
-    liked_videos: List[str] = []
-    watched_videos: List[str] = []
-    uploaded_videos: List[str] = []
-    notifications: List[str] = []
-    posts: List[str] = []
+    subscriptions: List[int] = []   # ✅ nếu bạn muốn tham chiếu user khác → int thay vì str
+    liked_videos: List[int] = []    # giả sử video cũng có _id int
+    watched_videos: List[int] = []
+    uploaded_videos: List[int] = []
+    notifications: List[int] = []
+    posts: List[int] = []
     
+
 class RegisterRequest(BaseModel):
     username: str
     email: EmailStr
     password: str
+
 
 class LoginRequest(BaseModel):
     username: Optional[str] = None
     email: Optional[EmailStr] = None
     password: str
 
+
 class ChangePasswordInput(BaseModel):
     old_password: str
     new_password: str
 
+
 class ChangePasswordRequest(ChangePasswordInput):
-    username: str | None = None  # sẽ được controller gán
+    username: Optional[str] = None  # sẽ được controller gán

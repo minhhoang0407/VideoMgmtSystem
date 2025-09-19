@@ -1,19 +1,23 @@
 from database.connection import db
-from models.video import VideoResponse,VideoUpdateRequest,VideoInsertRequest
+from models.video import VideoResponse, VideoUpdateRequest, VideoInsertRequest
 from services.upload_cloud_service import upload_file_to_cloud
-from bson import ObjectId
 from typing import List, Optional
-from fastapi import HTTPException,UploadFile
+from fastapi import HTTPException, UploadFile
 
 #init collection
 collection = db['videos']
 
-
+#=========================helper============================
 def to_video(video: dict) -> VideoResponse:
-    #Chuyển Mongo document thành Video model
-    video["_id"] = str(video["_id"])  # ObjectId -> str
-    return VideoResponse(**video)
+    # Đảm bảo dict có _id
+    return VideoResponse.model_validate(video, from_attributes=False)
 
+async def get_next_id_from_max(col):
+    doc = await col.find_one(sort=[("_id", -1)])   # lấy document có _id lớn nhất
+    if doc and "_id" in doc:
+        return int(doc["_id"]) + 1
+
+#========================service=============================
 #output service->list _id video
 async def get_all_videos() -> List[VideoResponse]:
     videos:List[VideoResponse]=[]
@@ -23,15 +27,31 @@ async def get_all_videos() -> List[VideoResponse]:
 #------------------------------------------------------------------------------
 #output service-> 
 # 🔹 Service: tạo video chỉ lưu metadata
-async def create_video(video_req):
+async def create_video(video_req: VideoInsertRequest):
     video_data = video_req.model_dump()
-    result = collection.insert_one(video_data)
-    video_data["_id"] = str(result.inserted_id)
-    return video_data
+    # ✅ Lấy id mới
+    new_id = await get_next_id_from_max(collection)
+    if new_id is None:
+        new_id = 100  # fallback id đầu tiên
+    new_id = await get_next_id_from_max(collection)
+    if new_id is None:
+        new_id = 100
+        
+    video_data["_id"] = new_id
+
+    # Thực hiện insert và lưu kết quả vào biến 'result'
+    result = await collection.insert_one(video_data)
+    # Tìm lại bản ghi hoàn chỉnh từ database bằng _id đã được tạo
+    created_video_doc = await collection.find_one({"_id": result.inserted_id})
+    # Kiểm tra xem có tìm thấy bản ghi không
+    if not created_video_doc:
+        raise HTTPException(status_code=500, detail="Failed to retrieve created video from database.")
+    # Chuyển đổi bản ghi đầy đủ sang VideoResponse và trả về
+    return to_video(created_video_doc)
 
 # 🔹 Service: upload file và gắn vào video đã có (Cloudinary)
-async def upload_video(video_id: str, file: UploadFile, uploader_name: str):
-    video = collection.find_one({"_id": ObjectId(video_id)})
+async def upload_video(video_id: int, file: UploadFile, uploader_name: str):
+    video = collection.find_one({"_id": video_id})
     if not video:
         raise HTTPException(status_code=404, detail="Video not found")
 
@@ -48,19 +68,18 @@ async def upload_video(video_id: str, file: UploadFile, uploader_name: str):
 
     # Cập nhật DB
     collection.update_one(
-        {"_id": ObjectId(video_id)},
+        {"_id": video_id},
         {"$set": {"file_url": file_url}}
     )
 
     video["file_url"] = file_url
-    video["_id"] = str(video["_id"])
-    return video
+    return to_video(video)
 #------------------------------------------------------------------------------
 #output service-> _id video
-async def get_video_by_id(video_id: str) -> Optional[VideoResponse]:
+async def get_video_by_id(video_id: int) -> Optional[VideoResponse]:
     if not ObjectId.is_valid(video_id):
         return None
-    video = await collection.find_one({"_id": ObjectId(video_id)})
+    video = await collection.find_one({"_id": video_id})
     if video:
         return to_video(video)
     return None
@@ -85,24 +104,21 @@ async def get_videos_by_category(category: str, limit: int = 50) -> List[VideoRe
 
 #------------------------------------------------------------------------------
 # PUT update video
-async def update_video(video_id: str, video_update: VideoUpdateRequest):
-    if not ObjectId.is_valid(video_id):
-        raise HTTPException(status_code=400, detail="ID không hợp lệ")
-
+async def update_video(video_id: int, video_update: VideoUpdateRequest):
     update_data = {k: v for k, v in video_update.model_dump().items() if v is not None}
 
     if not update_data:
         raise HTTPException(status_code=400, detail="Không có dữ liệu để cập nhật")
 
     result = await collection.update_one(
-        {"_id": ObjectId(video_id)},
+        {"_id": video_id},
         {"$set": update_data}
     )
 
     if result.modified_count == 0:
         raise HTTPException(status_code=500, detail="Không thể cập nhật video")
 
-    updated = await collection.find_one({"_id": ObjectId(video_id)})
+    updated = await collection.find_one({"_id": video_id})
     if not updated:
         raise HTTPException(status_code=500, detail="Video sau cập nhật không tìm thấy")
 
@@ -110,11 +126,8 @@ async def update_video(video_id: str, video_update: VideoUpdateRequest):
 
 #------------------------------------------------------------------------------
 # 🔹 DELETE video theo video_id
-async def delete_video(video_id: str) -> bool:
-    if not ObjectId.is_valid(video_id):
-        raise HTTPException(status_code=400, detail="ID không hợp lệ")
-
-    result = await collection.delete_one({"_id": ObjectId(video_id)})
+async def delete_video(video_id: int) -> bool:
+    result = await collection.delete_one({"_id": video_id})
 
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Video không tồn tại")

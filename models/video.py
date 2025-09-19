@@ -1,18 +1,20 @@
 from typing import List, Optional
 from pydantic import BaseModel, Field
-from datetime import datetime,timezone
+from datetime import datetime, timezone
+
 
 class AIFeatures(BaseModel):
     transcript: Optional[str] = None
     summary: Optional[str] = None
     keywords: List[str] = []
 
-#video Response
+
+# Video Response
 class VideoResponse(BaseModel):
-    id: Optional[str] = Field(None, alias="_id")
+    id: int = Field(..., alias="_id")   # ✅ _id trong MongoDB là int
     title: str
     description: str
-    uploader_id: Optional[str] = None
+    uploader_id: Optional[int] = None   # ✅ nếu User._id cũng là int
     uploader_name: str
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     status: str = "public"
@@ -20,12 +22,12 @@ class VideoResponse(BaseModel):
     tags: List[str] = []
     views: int = 0
     likes_count: int = 0
-    likes: List[str] = []
-    views_list: List[str] = []
-    comments: List[dict] = []
-    ai_features: AIFeatures = AIFeatures()
-    # ✅ Thuộc tính mới sau khi đã lưu lên cloud
+    likes: List[int] = []              # ✅ list user id (int)
+    views_list: List[int] = []         # ✅ list user id (int)
+    comments: List[dict] = []          # có thể sau này đổi sang Comment model
+    ai_features: AIFeatures = Field(default_factory=AIFeatures)
     url: Optional[str] = None
+
 
 class VideoInsertInput(BaseModel):
     title: str
@@ -34,17 +36,18 @@ class VideoInsertInput(BaseModel):
     category: str
     tags: List[str] = []
 
-#videoInsertRequest
+
+# Video Insert Request
 class VideoInsertRequest(VideoInsertInput):
     # ✅ Lấy từ token (controller set, user không nhập)
-    uploader_id: Optional[str] = None
+    uploader_id: Optional[int] = None
     uploader_name: Optional[str] = None
 
     # ✅ Các trường mặc định
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     likes_count: int = 0
-    likes: List[str] = []
-    views_list: List[str] = []
+    likes: List[int] = []
+    views_list: List[int] = []
     comments: List[dict] = []
     ai_features: AIFeatures = Field(default_factory=AIFeatures)
     url: Optional[str] = None
@@ -57,6 +60,3 @@ class VideoUpdateRequest(BaseModel):
     status: Optional[str] = None
     category: Optional[str] = None
     tags: Optional[List[str]] = None
-
-
-    
