@@ -1,10 +1,10 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr,Field
 from datetime import datetime
 from typing import List, Optional
 
 
 class User(BaseModel):
-    id: int                      # ✅ _id trong MongoDB bây giờ là số nguyên
+    id: int = Field(..., alias="_id")                   # ✅ _id trong MongoDB bây giờ là số nguyên
     username: str
     email: EmailStr
     password_hash: str

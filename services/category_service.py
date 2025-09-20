@@ -8,7 +8,7 @@ collection = db["categories"]
 # ================== Helper ==================
 def category_helper(cat) -> CategoryResponse:
     return CategoryResponse(
-        #id=str(cat["_id"]),  # ép sang string để trả ra API
+        _id=cat["_id"],  # ép sang string để trả ra API
         name=cat["name"],
         description=cat.get("description")
     )

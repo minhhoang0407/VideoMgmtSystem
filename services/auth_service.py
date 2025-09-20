@@ -120,6 +120,6 @@ async def get_current_user(
     # loại bỏ password_hash khi trả ra
     user_out = {k: v for k, v in user.items() if k != "password_hash"}
     # đồng nhất key id
-    user_out["id"] = str(user_out.pop("_id"))
+    #user_out["id"] = str(user_out.pop("_id"))
 
     return user_out
