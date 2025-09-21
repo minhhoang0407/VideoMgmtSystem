@@ -1,4 +1,6 @@
 from fastapi import FastAPI,HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+
 import config # noqa: F401
 from middleware import CustomResponseMiddleware
 from exception_handle import http_exception_handler, generic_exception_handler
@@ -12,6 +14,19 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="My Video App API",
         version="1.0.0"
+    )
+
+    # ✅ Add CORS middleware
+    origins = [
+        "http://localhost:5174",   # FE chạy Vite
+        "http://127.0.0.1:5174",   # backup cho localhost
+    ]
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=origins,      # chỉ cho phép FE gọi
+        allow_credentials=True,
+        allow_methods=["*"],        # GET, POST, PUT, DELETE...
+        allow_headers=["*"],        # cho tất cả headers
     )
     # ✅ Add middleware 
     app.add_middleware(CustomResponseMiddleware)
