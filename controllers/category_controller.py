@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 from typing import List
-from models.category import CategoryRequest, CategoryResponse
+from models.category import CategoryRequest, CategoryResponse,CategoryUpdateRequest
 from services.category_service import (
     create_category,
     get_all_categories,
@@ -27,7 +27,7 @@ async def add_category(req: CategoryRequest, current_user: dict = Depends(get_cu
     return await create_category(req)
 
 @router.put("/{category_id}", response_model=CategoryResponse)
-async def edit_category(category_id: int, req: CategoryRequest, current_user: dict = Depends(get_current_user)):
+async def edit_category(category_id: int, req:CategoryUpdateRequest, current_user: dict = Depends(get_current_user)):
     return await update_category(category_id, req)
 
 @router.delete("/{category_id}")

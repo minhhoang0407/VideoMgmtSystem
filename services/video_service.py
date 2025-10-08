@@ -77,8 +77,6 @@ async def upload_video(video_id: int, file: UploadFile, uploader_name: str):
 #------------------------------------------------------------------------------
 #output service-> _id video
 async def get_video_by_id(video_id: int) -> Optional[VideoResponse]:
-    if not ObjectId.is_valid(video_id):
-        return None
     video = await collection.find_one({"_id": video_id})
     if video:
         return to_video(video)

@@ -1,6 +1,6 @@
 from bson import ObjectId
 from database.connection import db
-from models.category import CategoryRequest, CategoryResponse
+from models.category import CategoryRequest, CategoryResponse,CategoryUpdateRequest
 from fastapi import HTTPException
 
 collection = db["categories"]
@@ -42,8 +42,8 @@ async def get_category_by_id(category_id: int):
     return category_helper(cat)
 
 # 🔹 Update
-async def update_category(category_id: int, req: CategoryRequest):
-    update_data = req.model_dump()
+async def update_category(category_id: int, req: CategoryUpdateRequest):
+    update_data = req.model_dump(exclude_unset=True)
     result = await collection.update_one(
         {"_id": category_id},
         {"$set": update_data}

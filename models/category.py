@@ -11,3 +11,6 @@ class CategoryResponse(BaseModel):
     id: int = Field(..., alias="_id")   # ✅ _id trong Mongo là int
     name: str
     description: Optional[str] = None
+class CategoryUpdateRequest(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None

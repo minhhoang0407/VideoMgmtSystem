@@ -36,7 +36,7 @@ async def post_video(
             category=video_input.category,
             tags=video_input.tags
         )
-        video_req.uploader_id = int(current_user["id"])
+        video_req.uploader_id = int(current_user["_id"])
         video_req.uploader_name = current_user["username"]
 
         # ✅ Tạo video trong DB

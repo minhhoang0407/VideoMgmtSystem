@@ -155,14 +155,14 @@ async def get_user_avatar(user_id: int):
         raise HTTPException(status_code=404, detail="Avatar not found")
     return FileResponse(filepath)
 #update avatar (cần token để xác thực)
-@router.put("/me/avatar")
+@router.put("/avatar/me")
 async def update_my_avatar(
     file: UploadFile = File(...),
     current_user: dict = Depends(get_current_user)
 ):
     return await update_avatar(int(current_user["_id"]), file)
 # Delete avatar (cần token để xác thực)
-@router.delete("/me/avatar")
+@router.delete("/avatar/me")
 async def delete_my_avatar(
     current_user: dict = Depends(get_current_user)
 ):
