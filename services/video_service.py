@@ -51,7 +51,7 @@ async def create_video(video_req: VideoInsertRequest):
 
 # 🔹 Service: upload file và gắn vào video đã có (Cloudinary)
 async def upload_video(video_id: int, file: UploadFile, uploader_name: str):
-    video = collection.find_one({"_id": video_id})
+    video = await collection.find_one({"_id": video_id})
     if not video:
         raise HTTPException(status_code=404, detail="Video not found")
 
@@ -61,18 +61,18 @@ async def upload_video(video_id: int, file: UploadFile, uploader_name: str):
 
     # Upload file lên Cloudinary
     try:
-        file_url = await upload_file_to_cloud(file.file, resource_type="video")
+        file_url = await upload_file_to_cloud(file.file,uploader_name, resource_type="video")
     except Exception as e:
-        #raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
         file_url="NaN"
 
     # Cập nhật DB
-    collection.update_one(
+    await collection.update_one(
         {"_id": video_id},
-        {"$set": {"file_url": file_url}}
+        {"$set": {"url": file_url}}
     )
 
-    video["file_url"] = file_url
+    video["url"] = file_url
     return to_video(video)
 #------------------------------------------------------------------------------
 #output service-> _id video
