@@ -1,6 +1,7 @@
 from pydantic import BaseModel, EmailStr,Field
 from datetime import datetime
 from typing import List, Optional
+from typing import Optional, Any
 
 
 class User(BaseModel):
@@ -25,8 +26,9 @@ class RegisterRequest(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    username: Optional[str] = None
-    email: Optional[EmailStr] = None
+    # username: Optional[str] = None
+    #email: Optional[EmailStr] = None
+    email: EmailStr
     password: str
 
 
@@ -37,3 +39,12 @@ class ChangePasswordInput(BaseModel):
 
 class ChangePasswordRequest(ChangePasswordInput):
     username: Optional[str] = None  # sẽ được controller gán
+
+
+class SuccessResponse(BaseModel):
+    message: str
+    data: Optional[Any] = None
+
+class ErrorResponse(BaseModel):
+    message: str
+    code: str

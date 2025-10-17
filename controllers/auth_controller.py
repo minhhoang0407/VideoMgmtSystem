@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends, Request, Response, Security,UploadFile,File
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from models.user import RegisterRequest, LoginRequest,ChangePasswordRequest,ChangePasswordInput
+from models.user import RegisterRequest, LoginRequest,ChangePasswordRequest,ChangePasswordInput, SuccessResponse, ErrorResponse
 from fastapi.responses import FileResponse
 from services.avatar_service import upload_avatar,get_avatar, update_avatar, delete_avatar
 from datetime import datetime, timezone
@@ -66,31 +66,29 @@ async def register(req: RegisterRequest):
 # ========== LOGIN ==========
 @router.post("/login")
 async def login(req: LoginRequest, response: Response):
-    # tìm user theo username hoặc email
-    query = {}
-    if req.username:
-        query["username"] = req.username
-    elif req.email:
-        query["email"] = req.email
-    else:
-        raise HTTPException(status_code=400, detail="username or email required")
+    # Bắt buộc phải có email
+    if not req.email:
+        return error_response("Email is required", status_code=400, code="EMAIL_REQUIRED")
 
-    user = await collection.find_one(query)
+    # Tìm user theo email
+    user = await collection.find_one({"email": req.email})
+
+    # Không tìm thấy user hoặc sai mật khẩu
     if not user or not verify_password(req.password, user["password_hash"]):
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+        return error_response("Invalid credentials", status_code=401, code="INVALID_CREDENTIALS")
 
+    # Tạo access token
     token = create_access_token(user_id=user["_id"], username=user["username"])
-    # set httpOnly cookie để browser tự gửi ở những request tiếp theo (không cần user dán token)
+
+    # Lưu token vào cookie (HTTPOnly)
     response.set_cookie(
         key="access_token",
         value=token,
         httponly=True,
-        samesite="lax"  # hoặc 'strict' / 'none' tuỳ cấu hình
-        # secure=True  # bật nếu dùng HTTPS
+        samesite="lax"
+        # secure=True  # bật nếu bạn chạy HTTPS
     )
-    # trả token trong body để client non-browser (Postman) dễ lấy
-    return {"access_token": token}
-
+    return success_response("Login successful", data={"access_token": token})
 
 # ========== GET PROFILE ==========
 @router.get("/me")
@@ -112,8 +110,33 @@ def logout(request: Request, response: Response, credentials: HTTPAuthorizationC
     revoke_token(token)
     # xóa cookie phía client
     response.delete_cookie("access_token")
-    return {"message": "Logged out successfully"}
+    return success_response("Logged out successfully")
 #===================CHANGPASSWORD====================
+# @router.post("/change-password",  response_model=SuccessResponse)
+# async def change_user_password(
+#     request: ChangePasswordInput,
+#     current_user: dict = Depends(get_current_user)
+# ):
+#     req_with_user = ChangePasswordRequest(
+#         username=current_user["username"],
+#         old_password=request.old_password,
+#         new_password=request.new_password
+#     )
+
+#     result = await change_password(req_with_user)
+#     if result == -404:
+#         raise HTTPException(status_code=404, detail="User not found")
+#     if result == -1:
+#         raise HTTPException(status_code=400, detail="Old password is incorrect")
+#     if result == -2:
+#         raise HTTPException(status_code=400, detail="Password must be at least 6 characters, include uppercase, lowercase, number, and special character")
+#     if result == -3:
+#         raise HTTPException(status_code=400, detail="New password must be different from old password")
+
+#     # return {"message": "Password changed successfully"}
+    
+
+
 @router.post("/change-password")
 async def change_user_password(
     request: ChangePasswordInput,
@@ -135,18 +158,30 @@ async def change_user_password(
     if result == -3:
         raise HTTPException(status_code=400, detail="New password must be different from old password")
 
-    return {"message": "Password changed successfully"}
+    return success_response("Password changed successfully")
+
 
 
 #====================AVATAR==============================
+# Upload avatar (cần token để xác thực)
+# @router.post("/avatar/me")
+# async def upload_my_avatar(
+#     file: UploadFile = File(...),
+#     current_user: dict = Depends(get_current_user)
+# ):
+#     return await upload_avatar(int(current_user["_id"]), file)
+
 # Upload avatar (cần token để xác thực)
 @router.post("/avatar/me")
 async def upload_my_avatar(
     file: UploadFile = File(...),
     current_user: dict = Depends(get_current_user)
 ):
-    return await upload_avatar(int(current_user["_id"]), file)
-
+    # upload_avatar đã raise HTTPException khi lỗi → FE sẽ nhận JSON chuẩn
+    result = await upload_avatar(int(current_user["_id"]), file)
+    data = {"avatar_path": file.filename}
+    return success_response("Avatar uploaded successfully", data=data)
+   
 # Hiển thị avatar (public)
 @router.get("/avatar/{user_id}")
 async def get_user_avatar(user_id: int):
@@ -154,16 +189,24 @@ async def get_user_avatar(user_id: int):
     if not filepath or not os.path.exists(filepath):
         raise HTTPException(status_code=404, detail="Avatar not found")
     return FileResponse(filepath)
-#update avatar (cần token để xác thực)
+
+
 @router.put("/avatar/me")
 async def update_my_avatar(
     file: UploadFile = File(...),
     current_user: dict = Depends(get_current_user)
 ):
-    return await update_avatar(int(current_user["_id"]), file)
-# Delete avatar (cần token để xác thực)
+    # update_avatar trả về đường dẫn hoặc tên file lưu trên server
+    result = await update_avatar(int(current_user["_id"]), file)
+    
+    # trả về tên file gốc upload
+    data = {"avatar_path": file.filename}
+    return success_response("Avatar updated successfully", data=data)
+
+#Delete avatar (cần token để xác thực)
 @router.delete("/avatar/me")
 async def delete_my_avatar(
     current_user: dict = Depends(get_current_user)
 ):
-    return await delete_avatar(int(current_user["_id"]))
+    result= await delete_avatar(int(current_user["_id"]))
+    return success_response("Avatar delete successfully")

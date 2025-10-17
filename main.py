@@ -10,6 +10,11 @@ from controllers.video_controller import router as video_router
 from controllers.auth_controller import router as user_router
 from controllers.category_controller import router as category_router
 
+import logging
+logging.getLogger("uvicorn.access").addFilter(
+    lambda record: "OPTIONS" not in record.getMessage()
+)
+
 def create_app() -> FastAPI:
     app = FastAPI(
         title="My Video App API",
@@ -19,7 +24,11 @@ def create_app() -> FastAPI:
     # ✅ Add CORS middleware
     origins = [
         "http://localhost:5174",   # FE chạy Vite
-        "http://127.0.0.1:5174",   # backup cho localhost
+        "http://127.0.0.1:5174",
+        "http://localhost:5175",   # thêm cho chắc
+        "http://127.0.0.1:5175",
+        
+              # backup cho localhost
     ]
     app.add_middleware(
         CORSMiddleware,
