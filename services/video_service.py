@@ -19,11 +19,23 @@ async def get_next_id_from_max(col):
 
 #========================service=============================
 #output service->list _id video
-async def get_all_videos() -> List[VideoResponse]:
-    videos:List[VideoResponse]=[]
-    async for video in collection.find():
+
+# async def get_all_videos() -> List[VideoResponse]:
+#     videos:List[VideoResponse]=[]
+#     async for video in collection.find():
+#         videos.append(to_video(video))
+#     return videos
+
+async def get_all_videos(limit: int = 6, skip: int = 0) -> List[VideoResponse]:
+    videos: List[VideoResponse] = []
+
+    # lấy dữ liệu từ MongoDB có phân trang
+    cursor = collection.find().skip(skip).limit(limit)
+    async for video in cursor:
         videos.append(to_video(video))
+
     return videos
+
 #------------------------------------------------------------------------------
 #output service-> 
 # 🔹 Service: tạo video chỉ lưu metadata

@@ -25,8 +25,8 @@ def create_app() -> FastAPI:
     origins = [
         "http://localhost:5174",   # FE chạy Vite
         "http://127.0.0.1:5174",
-        "http://localhost:5175",   # thêm cho chắc
-        "http://127.0.0.1:5175",
+        "http://localhost:5180",   # thêm cho chắc
+        "http://127.0.0.1:5180",
         
               # backup cho localhost
     ]
