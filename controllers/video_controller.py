@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException,UploadFile, File, Form,Depends
 import json
 from models.video import VideoInsertRequest,VideoResponse,VideoUpdateRequest,VideoInsertInput
+from response_formatter import success_response, error_response
 from services.video_service import (
     get_all_videos,
     create_video,
@@ -16,9 +17,25 @@ from services.auth_service import get_current_user
 
 router = APIRouter(prefix="/videos", tags=["Videos"])
 
+# Hiển thị  all list các video
+# @router.get("/")
+# async def list_videos():
+#     return await get_all_videos()
+
+# @router.get("/")
+# async def list_videos():
+#     videos = await get_all_videos()
+#     return {
+#         "success": True,
+#         "message": "Videos fetched successfully",
+#         "data": videos
+#     }
+# Hiển thị list các video có phân trang
 @router.get("/")
-async def list_videos():
-    return await get_all_videos()
+async def list_videos(limit: int = 6, skip: int = 0):
+    videos = await get_all_videos(limit=limit, skip=skip)
+    return success_response("Video fetched successfully", data=videos)
+
 
 #cần token
 #post metadata video
@@ -64,13 +81,37 @@ async def upload_video_file(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# from fastapi import APIRouter, HTTPException
+
+# router = APIRouter()
+
+#Video detail
+# @router.get("/{video_id}")
+# async def get_video(video_id: int):
+#     video = await get_video_by_id(video_id)
+
+#     if not video:
+#         # ❌ Không tìm thấy video -> 404
+#         raise HTTPException(status_code=404, detail="Video not found")
+
+#     return {
+#         "success": True,
+#         "message": "Video fetched successfully",
+#         "extensions": {
+#             "code": "SUCCESS",
+#             "status": 200,
+#             "data": video
+#         }
+#     }
+
 @router.get("/{video_id}")
 async def get_video(video_id: int):
     video = await get_video_by_id(video_id)
+
     if not video:
-         # ❌ Không tìm thấy document -> 404
         raise HTTPException(status_code=404, detail="Video not found")
-    return video
+
+    return success_response("Video fetched successfully", data=video)
 
 # 🔹 GET theo uploader_name
 @router.get("/uploader/{uploader_name}", response_model=List[VideoResponse])

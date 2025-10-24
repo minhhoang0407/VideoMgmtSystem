@@ -18,6 +18,7 @@ class VideoResponse(BaseModel):
     uploader_name: str
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     status: str = "public"
+    status_video: Optional[str]="Haven't Video"
     category: str
     tags: List[str] = []
     views: int = 0
@@ -44,6 +45,7 @@ class VideoInsertRequest(VideoInsertInput):
     uploader_name: Optional[str] = None
 
     # ✅ Các trường mặc định
+    status_video: Optional[str]=None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     likes_count: int = 0
     likes: List[int] = []

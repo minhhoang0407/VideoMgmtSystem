@@ -64,6 +64,35 @@ async def register(req: RegisterRequest):
     return success_response("User registered successfully")
 
 # ========== LOGIN ==========
+
+# @router.post("/login")
+# async def login(req: LoginRequest, response: Response):
+#     # Bắt buộc phải có email
+#     if not req.email:
+#         return error_response("Email is required", status_code=400, code="EMAIL_REQUIRED")
+
+#     # Tìm user theo email
+#     user = await collection.find_one({"email": req.email})
+
+#     # Không tìm thấy user hoặc sai mật khẩu
+#     if not user or not verify_password(req.password, user["password_hash"]):
+#         return error_response("Invalid credentials", status_code=401, code="INVALID_CREDENTIALS")
+
+#     # Tạo access token
+#     token = create_access_token(user_id=user["_id"], username=user["username"])
+
+#     # Lưu token vào cookie (HTTPOnly)
+#     response.set_cookie(
+#         key="access_token",
+#         value=token,
+#         httponly=True,
+#         samesite="lax"
+#         # secure=True  # bật nếu bạn chạy HTTPS
+#     )
+#     return success_response("Login successful", data={"access_token": token})
+
+
+
 @router.post("/login")
 async def login(req: LoginRequest, response: Response):
     # Bắt buộc phải có email
@@ -88,7 +117,16 @@ async def login(req: LoginRequest, response: Response):
         samesite="lax"
         # secure=True  # bật nếu bạn chạy HTTPS
     )
-    return success_response("Login successful", data={"access_token": token})
+
+    # Trả về access_token và thông tin user để FE hiển thị avatar/username
+    user_data = {
+        "_id": str(user["_id"]),
+        "username": user["username"],
+        "email": user["email"],
+        "avatar": user.get("avatar")  # avatar nếu có
+    }
+
+    return success_response("Login successful", data={"access_token": token, "user": user_data})
 
 # ========== GET PROFILE ==========
 @router.get("/me")
@@ -112,31 +150,6 @@ def logout(request: Request, response: Response, credentials: HTTPAuthorizationC
     response.delete_cookie("access_token")
     return success_response("Logged out successfully")
 #===================CHANGPASSWORD====================
-# @router.post("/change-password",  response_model=SuccessResponse)
-# async def change_user_password(
-#     request: ChangePasswordInput,
-#     current_user: dict = Depends(get_current_user)
-# ):
-#     req_with_user = ChangePasswordRequest(
-#         username=current_user["username"],
-#         old_password=request.old_password,
-#         new_password=request.new_password
-#     )
-
-#     result = await change_password(req_with_user)
-#     if result == -404:
-#         raise HTTPException(status_code=404, detail="User not found")
-#     if result == -1:
-#         raise HTTPException(status_code=400, detail="Old password is incorrect")
-#     if result == -2:
-#         raise HTTPException(status_code=400, detail="Password must be at least 6 characters, include uppercase, lowercase, number, and special character")
-#     if result == -3:
-#         raise HTTPException(status_code=400, detail="New password must be different from old password")
-
-#     # return {"message": "Password changed successfully"}
-    
-
-
 @router.post("/change-password")
 async def change_user_password(
     request: ChangePasswordInput,
@@ -160,17 +173,7 @@ async def change_user_password(
 
     return success_response("Password changed successfully")
 
-
-
 #====================AVATAR==============================
-# Upload avatar (cần token để xác thực)
-# @router.post("/avatar/me")
-# async def upload_my_avatar(
-#     file: UploadFile = File(...),
-#     current_user: dict = Depends(get_current_user)
-# ):
-#     return await upload_avatar(int(current_user["_id"]), file)
-
 # Upload avatar (cần token để xác thực)
 @router.post("/avatar/me")
 async def upload_my_avatar(

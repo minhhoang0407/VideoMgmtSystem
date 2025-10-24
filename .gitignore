@@ -1,1 +1,6 @@
 .env
+# Bỏ qua thư mục môi trường ảo của Python
+.venv/
+#python
+__pycache__/
+*.pyc

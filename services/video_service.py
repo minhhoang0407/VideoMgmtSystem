@@ -19,11 +19,23 @@ async def get_next_id_from_max(col):
 
 #========================service=============================
 #output service->list _id video
-async def get_all_videos() -> List[VideoResponse]:
-    videos:List[VideoResponse]=[]
-    async for video in collection.find():
+
+# async def get_all_videos() -> List[VideoResponse]:
+#     videos:List[VideoResponse]=[]
+#     async for video in collection.find():
+#         videos.append(to_video(video))
+#     return videos
+
+async def get_all_videos(limit: int = 6, skip: int = 0) -> List[VideoResponse]:
+    videos: List[VideoResponse] = []
+
+    # lấy dữ liệu từ MongoDB có phân trang
+    cursor = collection.find().skip(skip).limit(limit)
+    async for video in cursor:
         videos.append(to_video(video))
+
     return videos
+
 #------------------------------------------------------------------------------
 #output service-> 
 # 🔹 Service: tạo video chỉ lưu metadata
@@ -62,14 +74,16 @@ async def upload_video(video_id: int, file: UploadFile, uploader_name: str):
     # Upload file lên Cloudinary
     try:
         file_url = await upload_file_to_cloud(file.file,uploader_name, resource_type="video")
+        status_video = "PENDING"
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
         file_url="NaN"
+        status_video = "FAILED"
 
     # Cập nhật DB
     await collection.update_one(
         {"_id": video_id},
-        {"$set": {"url": file_url}}
+        {"$set": {"url": file_url,"status_video":status_video}}
     )
 
     video["url"] = file_url
