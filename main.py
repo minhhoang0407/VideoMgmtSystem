@@ -11,9 +11,11 @@ from exception_handle import http_exception_handler, generic_exception_handler
 from controllers.video_controller import router as video_router
 from controllers.auth_controller import router as user_router
 from controllers.category_controller import router as category_router
+from controllers.frame_controller import router as frame_router
 
 # 1. IMPORT HÀM VÒNG LẶP CỦA WORKER
 from model_trainned.cut_frames_worker import main_worker_loop
+from services.search_service import search_service
 
 import logging
 logging.getLogger("uvicorn.access").addFilter(
@@ -32,7 +34,10 @@ async def lifespan(app: FastAPI):
     
     # Tạo một tác vụ nền cho worker, nó sẽ chạy song song với server
     worker_task = asyncio.create_task(main_worker_loop())
-    
+
+    # Tải các model và index của cỗ máy tìm kiếm
+    # Chạy trong threadpool để không block event loop chính khi tải file
+    await search_service.load()
     # Server đã sẵn sàng và bắt đầu nhận request
     yield
     
@@ -80,6 +85,7 @@ def create_app() -> FastAPI:
     # Đăng ký routers (Giữ nguyên)
     app.include_router(user_router)
     app.include_router(video_router)
+    app.include_router(frame_router)
     app.include_router(category_router)
     
     return app
