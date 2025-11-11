@@ -75,7 +75,7 @@ async def resync_embeddings_from_db():
                 
             try:
                 # Tải ảnh từ cloud
-                response = requests.get(image_url, timeout=10)
+                response = requests.get(image_url, timeout=100)
                 response.raise_for_status()
                 image = Image.open(BytesIO(response.content)).convert("RGB")
                 
@@ -115,3 +115,6 @@ async def resync_embeddings_from_db():
 if __name__ == "__main__":
     # Cần cài đặt requests: pip install requests
     asyncio.run(resync_embeddings_from_db())
+
+# note: ảnh lỗi truy cập cần xử lí
+#//res.cloudinary.com/dbdty9p1v/image/upload/v1760703569/frames/v0zbmq4dhhzqn464kbpl.jpg   #6432

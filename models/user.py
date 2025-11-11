@@ -40,6 +40,8 @@ class ChangePasswordInput(BaseModel):
 class ChangePasswordRequest(ChangePasswordInput):
     username: Optional[str] = None  # sẽ được controller gán
 
+class LikeVideoRequest(BaseModel):
+    video_id: int
 
 class SuccessResponse(BaseModel):
     message: str

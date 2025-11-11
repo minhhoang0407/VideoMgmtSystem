@@ -1,8 +1,9 @@
 from fastapi import APIRouter, HTTPException, Depends, Request, Response, Security,UploadFile,File
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from models.user import RegisterRequest, LoginRequest,ChangePasswordRequest,ChangePasswordInput, SuccessResponse, ErrorResponse
+from models.user import RegisterRequest, LoginRequest,ChangePasswordRequest,ChangePasswordInput, SuccessResponse, ErrorResponse, LikeVideoRequest
 from fastapi.responses import FileResponse
 from services.avatar_service import upload_avatar,get_avatar, update_avatar, delete_avatar
+from services.like_service import LikeService
 from datetime import datetime, timezone
 from response_formatter import success_response, error_response
 import os
@@ -132,6 +133,50 @@ async def login(req: LoginRequest, response: Response):
 @router.get("/me")
 async def me(current_user: dict = Depends(get_current_user)):
     return {"user": current_user}
+
+# ============================
+#=============LIKE / UNLIKE ========
+
+@router.post("/me/like", status_code=status.HTTP_200_OK)
+async def like_my_video(
+    request_data: LikeVideoRequest, # Đổi tên biến để rõ ràng hơn
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Thêm video_id vào danh sách liked_videos của người dùng hiện tại.
+    ENDPOINT: POST /auth/me/like
+    """
+    user_id = int(current_user["_id"])
+    video_id = request_data.video_id
+
+    modified_count = await like_service.add_liked_video(user_id, video_id)
+    
+    if modified_count > 0:
+        return success_response(f"Video {video_id} liked successfully.", data={"status": "liked"})
+    else:
+        # modified_count = 0 nghĩa là video_id đã tồn tại (nhờ $addToSet)
+        return success_response(f"Video {video_id} was already liked.", data={"status": "already_liked"})
+
+@router.post("/me/unlike", status_code=status.HTTP_200_OK)
+async def unlike_my_video(
+    request_data: LikeVideoRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Xóa video_id khỏi danh sách liked_videos của người dùng hiện tại.
+    ENDPOINT: POST /auth/me/unlike
+    """
+    user_id = int(current_user["_id"])
+    video_id = request_data.video_id
+    
+    modified_count = await like_service.remove_liked_video(user_id, video_id)
+    
+    if modified_count > 0:
+        return success_response(f"Video {video_id} unliked successfully.", data={"status": "unliked"})
+    else:
+        # modified_count = 0 nghĩa là video_id không tồn tại trong danh sách để xóa
+        return success_response(f"Video {video_id} was not in liked list.", data={"status": "not_liked"})
+
 
 #==================LOGOUT=============
 @router.post("/logout")

@@ -5,6 +5,7 @@ import faiss
 from PIL import Image
 from io import BytesIO
 from googletrans import Translator
+import asyncio
 
 # Thêm sys.path để import database
 import sys
@@ -66,23 +67,59 @@ class SearchService:
         ])
                 
         self.frame_ids = [doc["frame_id"] async for doc in frame_cursor]
-
-        print(f"INFO: Search Service loaded successfully. Indexed {self.faiss_index.ntotal} frames.")
+        print(f"INFO: Indexed {self.faiss_index.ntotal} frames in FAISS.")
+        print(f"INFO: Loaded {len(self.frame_ids)} frame_ids from database.")
 
     def _search(self, query_embedding, top_k=10):
-        """Hàm tìm kiếm cốt lõi bằng FAISS."""
+        """
+        Hàm tìm kiếm cốt lõi bằng FAISS, được chỉnh sửa để chỉ trả về
+        frame từ các VIDEO KHÁC NHAU cho đến khi đạt top_k.
+        """
         if self.faiss_index is None or self.faiss_index.ntotal == 0:
             return []
             
-        distances, indices = self.faiss_index.search(query_embedding, top_k)
+        # 1. Tìm kiếm tất cả các kết quả tiềm năng (nên lấy nhiều hơn top_k ban đầu)
+        # Ví dụ: Tìm top 100 kết quả tiềm năng
+        D, I = self.faiss_index.search(query_embedding, max(50, top_k * 5)) 
         
-        # Lấy ra các frame_id tương ứng từ chỉ số
-        results = [self.frame_ids[i] for i in indices[0] if i < len(self.frame_ids)]
-        return results
+        # Lấy danh sách indices từ kết quả tìm kiếm
+        potential_indices = I[0]
+        
+        selected_frame_ids = []
+        selected_video_ids = set()
+        
+        # 2. Lặp qua các chỉ mục tiềm năng để chọn lọc (Diversification)
+        for index in potential_indices:
+            # Kiểm tra xem chỉ mục có hợp lệ không
+            if index >= len(self.frame_ids):
+                continue
+
+            frame_id = self.frame_ids[index]
+            
+            # Giả định frame_id có dạng: {video_id}_{frame_index}
+            # Cần tách video_id
+            try:
+                # Tìm dấu "_" cuối cùng để tách video_id ra khỏi frame index
+                video_id = "_".join(frame_id.split('_')[:-1]) 
+            except:
+                # Trường hợp frame_id không theo định dạng mong muốn, sử dụng toàn bộ frame_id
+                video_id = frame_id
+                
+            # Logic quan trọng: Kiểm tra xem video này đã được chọn chưa
+            if video_id not in selected_video_ids:
+                # Nếu chưa, thêm frame_id này vào kết quả và đánh dấu video đã chọn
+                selected_frame_ids.append(frame_id)
+                selected_video_ids.add(video_id)
+                
+                # Nếu đã đủ số lượng top_k, dừng lại
+                if len(selected_frame_ids) >= top_k:
+                    break
+        
+        return selected_frame_ids
 
     async def search_by_text(self, text: str, top_k=10):
         # Dịch sang tiếng Anh
-        translation = await self.translator.translate(text, dest='en')
+        translation =await self.translator.translate(text, dest='en')
         translated_text = translation.text
         
         # Mã hóa văn bản

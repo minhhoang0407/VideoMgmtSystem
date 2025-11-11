@@ -48,7 +48,7 @@ async def search_frames_by_text(
         raise HTTPException(status_code=400, detail="Nội dung tìm kiếm không được để trống.")
     
     try:
-        found_frame_ids =await search_service.search_by_text(text, top_k=10)
+        found_frame_ids = await search_service.search_by_text(text, top_k=10)
         return await _fetch_and_sort_frames(found_frame_ids)
 
     except Exception as e:
