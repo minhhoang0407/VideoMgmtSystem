@@ -27,3 +27,5 @@ class LikeService:
                 }
             )
             return result.modified_count
+    
+like_service = LikeService(db)
