@@ -3,10 +3,12 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from models.user import RegisterRequest, LoginRequest,ChangePasswordRequest,ChangePasswordInput, SuccessResponse, ErrorResponse, LikeVideoRequest
 from fastapi.responses import FileResponse
 from services.avatar_service import upload_avatar,get_avatar, update_avatar, delete_avatar
-from services.like_service import LikeService
+from services.like_service import like_service
 from datetime import datetime, timezone
 from response_formatter import success_response, error_response
 import os
+from fastapi import status
+
 from services.auth_service import(
     hash_password,
     verify_password,
@@ -22,6 +24,11 @@ from database.connection import db
 router = APIRouter(prefix="/auth", tags=["Auth"])
 collection = db["users"]
 bearer_scheme = HTTPBearer(auto_error=False)
+
+# Bắt OPTIONS request để CORS preflight không bị 405
+@router.options("/{rest_of_path:path}")
+async def preflight_cors(rest_of_path: str):
+    return {}
 
 # ========== Helper: lấy next int _id ==========
 async def get_next_user_id():
