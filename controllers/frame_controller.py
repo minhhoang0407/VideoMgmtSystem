@@ -68,7 +68,7 @@ async def search_frames_by_image(
 
     try:
         image_bytes = await image.read()
-        found_frame_ids = search_service.search_by_image(image_bytes, top_k=10)
+        found_frame_ids = await search_service.search_by_image(image_bytes, top_k=10)
         return await _fetch_and_sort_frames(found_frame_ids)
 
     except Exception as e:

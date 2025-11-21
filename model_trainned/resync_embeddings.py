@@ -109,7 +109,7 @@ async def resync_embeddings_from_db():
     
     print("\n🎉 HOÀN TẤT! Quá trình đồng bộ đã xong.")
     print(f"   - Tổng số embedding đã tạo: {len(final_embeddings)}")
-    print("   - Bạn có thể đổi tên file 'cached_frame_embs_RESYNCED.npy' thành 'cached_frame_embs_synced.npy' để hệ thống sử dụng.")
+    #print("   - Bạn có thể đổi tên file 'cached_frame_embs_RESYNCED.npy' thành 'cached_frame_embs_synced.npy' để hệ thống sử dụng.")
 
 
 if __name__ == "__main__":

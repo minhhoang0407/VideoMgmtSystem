@@ -14,8 +14,8 @@ from controllers.category_controller import router as category_router
 from controllers.frame_controller import router as frame_router
 
 # 1. IMPORT HÀM VÒNG LẶP CỦA WORKER
-from model_trainned.cut_frames_worker import main_worker_loop
 from services.search_service import search_service
+from model_trainned.cut_frames_worker import main_worker_loop
 
 import logging
 logging.getLogger("uvicorn.access").addFilter(
