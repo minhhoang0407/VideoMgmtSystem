@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File, Query
+from fastapi import APIRouter, HTTPException, UploadFile, File, Query, status
 from typing import List, Dict, Any
 
 from services.search_service import search_service
@@ -74,3 +74,25 @@ async def search_frames_by_image(
     except Exception as e:
         print(f"ERROR: Image search failed: {e}")
         raise HTTPException(status_code=500, detail="Đã xảy ra lỗi trong quá trình tìm kiếm bằng hình ảnh.")
+
+#========================Hide API=========================
+@router.post("/reload-index", status_code=status.HTTP_200_OK)
+async def reload_search_index():
+    """
+    API để làm mới dữ liệu tìm kiếm (Hot Reload) sau khi có video mới.
+    Nên được gọi bởi Worker hoặc Admin.
+    """
+    try:
+        print("🔄 Yêu cầu Reload Index nhận được...")
+        # Gọi hàm reload_indices() của service để đọc lại file .npy và .json từ đĩa lên RAM
+        await search_service.reload_indices()
+        
+        # Lấy thông số hiện tại để trả về
+        total_vectors = search_service.faiss_index.ntotal if search_service.faiss_index else 0
+        return {
+            "message": "Index reloaded successfully",
+            "total_frames_in_ram": total_vectors
+        }
+    except Exception as e:
+        print(f"❌ Reload failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to reload index: {str(e)}")

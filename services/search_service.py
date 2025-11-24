@@ -6,19 +6,22 @@ from PIL import Image
 from io import BytesIO
 from googletrans import Translator
 import asyncio
+import json
+
 # Import BLIP-2
 from transformers import Blip2Processor, Blip2ForConditionalGeneration
 
 # Thêm sys.path để import database
 import sys
 import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+#sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from database.connection import db
+#from database.connection import db
 
 # Đường dẫn tới các tài sản
 BASE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'assets')
 EMBEDDINGS_NPY = os.path.join(BASE_DIR, "cached_frame_embs_RESYNCED.npy")
+IDS_JSON = os.path.join(BASE_DIR, "frame_ids_RESYNCED.json")
 FRAMES_COLLECTION = "frames"
 
 class SearchService:
@@ -38,53 +41,82 @@ class SearchService:
 
     async def load(self):
         """
-        Tải tất cả các model và dữ liệu cần thiết.
-        Hàm này chỉ được gọi một lần khi server khởi động.
+        Hàm khởi động chính.
+        - Load Model AI (chỉ 1 lần).
+        - Load Dữ liệu Index (gọi hàm con).
         """
         print("INFO:     Loading Search Service assets...")
         
-        # 1. Tải CLIP model
-        self.clip_model, _, self.clip_preprocess = open_clip.create_model_and_transforms(
-            "ViT-L-14", pretrained="openai", quick_gelu=True
-        )
-        self.clip_model = self.clip_model.to(self.device).eval()
-        self.tokenizer = open_clip.get_tokenizer('ViT-L-14')
+        # 1. Tải Models (Chỉ tải nếu chưa có)
+        if self.clip_model is None:
+            print("INFO:     Loading CLIP model...")
+            self.clip_model, _, self.clip_preprocess = open_clip.create_model_and_transforms(
+                "ViT-L-14", pretrained="openai", quick_gelu=True
+            )
+            self.clip_model = self.clip_model.to(self.device).eval()
+            self.tokenizer = open_clip.get_tokenizer('ViT-L-14')
 
-        # MỚI THÊM: Tải BLIP-2 model
-        print("INFO:     Loading BLIP-2 model (có thể mất vài phút)...")
-        blip_model_id = "Salesforce/blip2-opt-2.7b"
-        self.blip_processor = Blip2Processor.from_pretrained(blip_model_id,use_fast=True)
-        self.blip_model = Blip2ForConditionalGeneration.from_pretrained(blip_model_id).to(self.device)
-        print("INFO:     BLIP-2 model loaded.")
+            print("INFO:     Loading BLIP-2 model (có thể mất vài phút)...")
+            blip_model_id = "Salesforce/blip2-opt-2.7b"
+            self.blip_processor = Blip2Processor.from_pretrained(blip_model_id, use_fast=True)
+            self.blip_model = Blip2ForConditionalGeneration.from_pretrained(blip_model_id).to(self.device)
+            
+            self.translator = Translator()
+            print("INFO:     AI Models Loaded Successfully.")
 
-        # 2. Tải Google Translator
-        self.translator = Translator()
+        # 2. Tải dữ liệu tìm kiếm (Index)
+        await self.reload_indices()
+        print(f"INFO:     Search Service ready.")
 
-        # 3. Tải embeddings và xây dựng FAISS index
-        if not os.path.exists(EMBEDDINGS_NPY):
-            raise FileNotFoundError(f"File embedding không tồn tại: {EMBEDDINGS_NPY}")
+    async def reload_indices(self):
+        """
+        Hàm này chuyên dùng để Refresh dữ liệu tìm kiếm.
+        Có thể gọi lại nhiều lần mà không ảnh hưởng đến Model AI.
+        """
+        print("INFO:     Reloading Search Indices (NPY & JSON)...")
 
-        all_embeddings = np.load(EMBEDDINGS_NPY).astype('float32')
-        if all_embeddings.shape[0] == 0:
-            print("WARNING:  File embedding rỗng, tìm kiếm sẽ không hoạt động.")
+        # A. Kiểm tra file tồn tại
+        if not os.path.exists(EMBEDDINGS_NPY) or not os.path.exists(IDS_JSON):
+            print("WARNING:  Chưa có dữ liệu embedding hoặc mapping. Hệ thống tìm kiếm tạm thời rỗng.")
+            self.faiss_index = None
+            self.frame_ids = []
             return
 
-        embedding_dim = all_embeddings.shape[1]
-        self.faiss_index = faiss.IndexFlatIP(embedding_dim)
-        faiss.normalize_L2(all_embeddings) # Chuẩn hóa L2 cho FAISS
-        self.faiss_index.add(all_embeddings)
+        try:
+            # B. Load Embeddings (.npy)
+            all_embeddings = np.load(EMBEDDINGS_NPY).astype('float32')
+            if all_embeddings.shape[0] == 0:
+                print("WARNING:  File embedding rỗng.")
+                self.faiss_index = None
+                self.frame_ids = []
+                return
 
-        # 4. Tải danh sách frame_id từ MongoDB để map kết quả
-        # Đảm bảo thứ tự của frame_id khớp với thứ tự của embedding
-        frame_cursor = db[FRAMES_COLLECTION].find({}, {"frame_id": 1}).sort([
-            ("video_id", 1), 
-            ("frame_id", 1)
-        ])
-                
-        self.frame_ids = [doc["frame_id"] async for doc in frame_cursor]
-        print(f"INFO: Indexed {self.faiss_index.ntotal} frames in FAISS.")
-        print(f"INFO: Loaded {len(self.frame_ids)} frame_ids from database.")
+            # C. Build FAISS Index
+            embedding_dim = all_embeddings.shape[1]
+            new_index = faiss.IndexFlatIP(embedding_dim)
+            faiss.normalize_L2(all_embeddings)
+            new_index.add(all_embeddings)
+            
+            # Gán vào biến class (Thread-safe đơn giản bằng việc gán pointer)
+            self.faiss_index = new_index
 
+            # D. Load ID Mapping (.json)
+            with open(IDS_JSON, 'r') as f:
+                self.frame_ids = json.load(f)
+
+            # E. Sanity Check
+            num_vectors = self.faiss_index.ntotal
+            num_ids = len(self.frame_ids)
+
+            if num_vectors != num_ids:
+                print(f"❌ CRITICAL ERROR: Dữ liệu bị lệch! Vectors: {num_vectors} != IDs: {num_ids}")
+            else:
+                print(f"✅ Index Reloaded: {num_ids} items loaded.")
+
+        except Exception as e:
+            print(f"❌ Error reloading indices: {e}")
+
+#==================ENCODING=======================
     #Hàm helper chuẩn hóa L2
     def _normalize_emb(self, emb):
         norm = np.linalg.norm(emb, axis=1, keepdims=True)
@@ -162,9 +194,15 @@ class SearchService:
         return selected_frame_ids
 
     async def search_by_text(self, text: str, top_k=10):
-        # Dịch sang tiếng Anh
-        translation =await self.translator.translate(text, dest='en')
-        translated_text = translation.text
+        translated_text = text
+        try:
+            # Thêm timeout
+            translation = await self.translator.translate(text, dest='en')
+            translated_text = translation.text
+        except Exception as e:
+            print(f"⚠️ Translator failed: {e}. Using original text.")
+            # Nếu dịch lỗi, dùng luôn text gốc để tìm kiếm thay vì crash app
+            translated_text = text
         
         # Mã hóa văn bản
         text_tokens = self.tokenizer([translated_text]).to(self.device)

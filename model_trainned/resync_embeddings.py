@@ -7,6 +7,7 @@ import open_clip
 import requests
 from io import BytesIO
 import asyncio
+import json
 
 # Thêm sys.path để import database connection
 import sys
@@ -18,8 +19,8 @@ from database.connection import db
 # Config
 # ============================
 BASE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'assets')
-# TẠO RA MỘT FILE .npy MỚI ĐỂ TRÁNH GHI ĐÈ LÊN FILE CŨ NGAY LẬP TỨC
 NEW_EMBEDDINGS_NPY = os.path.join(BASE_DIR, "cached_frame_embs_RESYNCED.npy")
+NEW_IDS_JSON = os.path.join(BASE_DIR, "frame_ids_RESYNCED.json")
 
 FRAMES_COLLECTION = "frames"
 BATCH_SIZE = 32 # Xử lý theo lô để tận dụng GPU
@@ -44,7 +45,7 @@ async def resync_embeddings_from_db():
     frames_collection = db[FRAMES_COLLECTION]
     
     # Sắp xếp theo video_id và frame_id để có một trật tự nhất quán
-    cursor = frames_collection.find({}, {"path": 1}).sort([
+    cursor = frames_collection.find({}, {"path": 1, "frame_id": 1}).sort([
         ("video_id", 1), 
         ("frame_id", 1)
     ])
@@ -60,27 +61,31 @@ async def resync_embeddings_from_db():
 
     # 3. Tải ảnh, encode lại và lưu vào danh sách
     all_new_embeddings = []
+    all_frame_ids = []
     
     pbar = tqdm(total=len(sorted_frames), desc="🖼️  Re-encoding frames")
 
     for i in range(0, len(sorted_frames), BATCH_SIZE):
         batch_docs = sorted_frames[i : i + BATCH_SIZE]
         image_tensors = []
+        batch_ids = []
         
         for doc in batch_docs:
             image_url = doc.get("path")
+            frame_id = doc.get("frame_id")
             if not image_url:
                 pbar.update(1)
                 continue
                 
             try:
                 # Tải ảnh từ cloud
-                response = requests.get(image_url, timeout=100)
+                response = requests.get(image_url, timeout=70)
                 response.raise_for_status()
                 image = Image.open(BytesIO(response.content)).convert("RGB")
                 
                 # Preprocess ảnh và thêm vào batch
                 image_tensors.append(clip_preprocess(image))
+                batch_ids.append(frame_id)
             except Exception as e:
                 print(f"\n⚠️ Lỗi khi xử lý ảnh {image_url}: {e}")
         
@@ -93,6 +98,7 @@ async def resync_embeddings_from_db():
                 feats = clip_model.encode_image(batch_tensor)
                 feats /= feats.norm(dim=-1, keepdim=True)
                 all_new_embeddings.append(feats.cpu().numpy())
+                all_frame_ids.extend(batch_ids)
         
         pbar.update(len(batch_docs))
         
@@ -102,19 +108,22 @@ async def resync_embeddings_from_db():
         print("❌ Không encode được embedding nào.")
         return
 
-    # 4. Nối tất cả các batch embedding và lưu file .npy mới
+    # 4. Lưu cả 2 file
+    # Lưu NPY
     final_embeddings = np.concatenate(all_new_embeddings, axis=0)
-    print(f"\n💾 Đang lưu file embedding đã đồng bộ tại: {NEW_EMBEDDINGS_NPY}")
     np.save(NEW_EMBEDDINGS_NPY, final_embeddings)
     
+    # Lưu JSON
+    with open(NEW_IDS_JSON, 'w') as f:
+        json.dump(all_frame_ids, f) # <--- Lưu danh sách ID
+    
     print("\n🎉 HOÀN TẤT! Quá trình đồng bộ đã xong.")
-    print(f"   - Tổng số embedding đã tạo: {len(final_embeddings)}")
-    #print("   - Bạn có thể đổi tên file 'cached_frame_embs_RESYNCED.npy' thành 'cached_frame_embs_synced.npy' để hệ thống sử dụng.")
+    print(f"   - Vectors: {len(final_embeddings)} -> {NEW_EMBEDDINGS_NPY}")
+    print(f"   - IDs:     {len(all_frame_ids)} -> {NEW_IDS_JSON}")
 
 
 if __name__ == "__main__":
     # Cần cài đặt requests: pip install requests
     asyncio.run(resync_embeddings_from_db())
 
-# note: ảnh lỗi truy cập cần xử lí
-#//res.cloudinary.com/dbdty9p1v/image/upload/v1760703569/frames/v0zbmq4dhhzqn464kbpl.jpg   #6432
+
