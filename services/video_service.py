@@ -98,9 +98,9 @@ async def get_video_by_id(video_id: int) -> Optional[VideoResponse]:
 
 #------------------------------------------------------------------------------
 # 🔹 Lấy video theo uploader_name
-async def get_videos_by_uploader(uploader_name: str, limit: int = 50) -> List[VideoResponse]:
+async def get_videos_by_uploader(uploader_id: int, limit: int = 50) -> List[VideoResponse]:
     videos: List[VideoResponse] = []
-    cursor = collection.find({"uploader_name": uploader_name}).sort("created_at", -1).limit(limit)
+    cursor = collection.find({"uploader_id": uploader_id}).sort("created_at", -1).limit(limit)
     async for video in cursor:
         videos.append(to_video(video))
     return videos

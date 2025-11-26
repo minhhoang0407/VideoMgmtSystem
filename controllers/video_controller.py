@@ -114,9 +114,9 @@ async def get_video(video_id: int):
     return success_response("Video fetched successfully", data=video)
 
 # 🔹 GET theo uploader_name
-@router.get("/uploader/{uploader_name}", response_model=List[VideoResponse])
-async def list_videos_by_uploader(uploader_name: str):
-    videos =await get_videos_by_uploader(uploader_name)
+@router.get("/uploader/{uploader_id}", response_model=List[VideoResponse])
+async def list_videos_by_uploader(uploader_id: int):
+    videos =await get_videos_by_uploader(uploader_id)
     if videos==[]:
         raise HTTPException(status_code=404, detail="Video not found")
     else:
